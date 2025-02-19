@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -295,6 +295,7 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
             var show = Settings.ShowDebugWindow.Value;
             ImGui.Begin("Debug Mode Window", ref show);
             Settings.ShowDebugWindow.Value = show;
+            var activePlugins = GameController.PluginBridge.GetMethod<Func<List<string>>>("GetActivePlugins")?.Invoke();
             ImGui.TextWrapped($"State: {state}");
             if (ImGui.Button("Clear History"))
             {
@@ -306,7 +307,17 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
             {
                 ImGui.TextUnformatted($"{dateTime:HH:mm:ss.fff}: {@event}");
             }
-
+            if (activePlugins != null && activePlugins.Any())
+            {
+                foreach (var plugin in activePlugins)
+                {
+                    ImGui.TextColored(Color.Green.ToImguiVec4(), $" - {plugin}");
+                }
+            }
+            else
+            {
+                ImGui.TextColored(Color.Red.ToImguiVec4(), "No active plugins.");
+            }
             ImGui.EndChild();
             ImGui.End();
         }
@@ -429,6 +440,12 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
         _pendingSideEffects = applicationResults.Where(x => x.ApplicationResult == SideEffectApplicationResult.UnableToApply).Select(x => x.x).ToList();
     }
 
+    private bool IsPluginActive(string pluginName)
+    {
+        var method = GameController.PluginBridge.GetMethod<Func<bool>>($"{pluginName}.IsActive");
+        return method?.Invoke() ?? false;
+    }
+
 
     private bool ShouldExecute(out string state)
     {
@@ -438,7 +455,19 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
             return false;
         }
 
-        if (!Settings.PluginSettings.EnableInEscapeState && 
+        if (IsPluginActive("AutoBlink"))
+        {
+            state = "Paused by AutoBlink";
+            return false;
+        }
+
+        if (IsPluginActive("SoulOffering"))
+        {
+            state = "Paused by SoulOffering";
+            return false;
+        }
+
+        if (!Settings.PluginSettings.EnableInEscapeState &&
             GameController.Game.IsEscapeState)
         {
             state = "Escape state is active";
@@ -482,4 +511,5 @@ public sealed class ReAgent : BaseSettingsPlugin<ReAgentSettings>
         state = "Ready";
         return true;
     }
+
 }
